@@ -4,9 +4,9 @@
   <img src="https://user-images.githubusercontent.com/33194443/105187518-38ac0c00-5b76-11eb-869b-b518df146924.png" />
 </p>
 
-Generate saved_model, tfjs, tf-trt, EdgeTPU, CoreML, quantized tflite, ONNX, OpenVINO, Myriad Inference Engine blob and .pb from .tflite.
+Generate saved_model, tfjs, tf-trt, EdgeTPU, CoreML, quantized tflite, ONNX, OpenVINO, Myriad Inference Engine blob and .pb from .tflite. Support for building environments with Docker. It is possible to directly access the host PC GUI and the camera to verify the operation. NVIDIA GPU (dGPU) support.
 
-[![PyPI - Downloads](https://img.shields.io/pypi/dm/tflite2tensorflow?color=2BAF2B&label=Downloads%EF%BC%8FInstalled)](https://pypistats.org/packages/tflite2tensorflow) ![GitHub](https://img.shields.io/github/license/PINTO0309/tflite2tensorflow?color=2BAF2B) [![PyPI](https://img.shields.io/pypi/v/tflite2tensorflow?color=2BAF2B)](https://pypi.org/project/tflite2tensorflow/) 
+[![PyPI - Downloads](https://img.shields.io/pypi/dm/tflite2tensorflow?color=2BAF2B&label=Downloads%EF%BC%8FInstalled)](https://pypistats.org/packages/tflite2tensorflow) ![GitHub](https://img.shields.io/github/license/PINTO0309/tflite2tensorflow?color=2BAF2B) [![PyPI](https://img.shields.io/pypi/v/tflite2tensorflow?color=2BAF2B)](https://pypi.org/project/tflite2tensorflow/)
 ![01](media/01.gif)
 
 ## 1. Supported Layers
@@ -81,12 +81,12 @@ Generate saved_model, tfjs, tf-trt, EdgeTPU, CoreML, quantized tflite, ONNX, Ope
 |66|NOT_EQUAL|tf.math.not_equal||
 |67|LOG|tf.math.log||
 |68|SQRT|tf.math.sqrt||
-|69|ARG_MIN|tf.math.argmin||
+|69|ARG_MIN|tf.math.argmin or tf.math.negative,tf.math.argmax||
 |70|REDUCE_PROD|tf.math.reduce_prod||
 |71|LOGICAL_OR|tf.math.logical_or||
 |72|LOGICAL_AND|tf.math.logical_and||
 |73|LOGICAL_NOT|tf.math.logical_not||
-|74|REDUCE_MIN|tf.math.reduce_min||
+|74|REDUCE_MIN|tf.math.reduce_min or tf.math.negative,tf.math.reduce_max||
 |75|REDUCE_ANY|tf.math.reduce_any||
 |76|SQUARE|tf.math.square||
 |77|ZEROS_LIKE|tf.zeros_like||
@@ -161,24 +161,30 @@ or
 $ docker build -t pinto0309/tflite2tensorflow:latest .
 
 # When TensorFlow Datasets are not used
-$ docker run --gpus all -it --rm \
-    -v `pwd`:/workspace/resources \
-    -e LOCAL_UID=$(id -u $USER) \
-    -e LOCAL_GID=$(id -g $USER) \
-    pinto0309/tflite2tensorflow:latest bash
-
-$ source /opt/intel/openvino_2021/bin/setupvars.sh
+$ xhost +local: && \
+  docker run --gpus all -it --rm \
+    -v `pwd`:/home/user/workdir \
+    -v /tmp/.X11-unix/:/tmp/.X11-unix:rw \
+    --device /dev/video0:/dev/video0:mwr \
+    --net=host \
+    -e XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR \
+    -e DISPLAY=$DISPLAY \
+    --privileged \
+    pinto0309/tflite2tensorflow:latest
 
 # For INT8 quantization and conversion to EdgeTPU model
 # "TFDS" is the folder where TensorFlow Datasets are downloaded.
-$ docker run --gpus all -it --rm \
-    -v `pwd`:/workspace/resources \
-    -v ${HOME}/TFDS:/workspace/resources/TFDS \
-    -e LOCAL_UID=$(id -u $USER) \
-    -e LOCAL_GID=$(id -g $USER) \
-    pinto0309/tflite2tensorflow:latest bash
-
-$ source /opt/intel/openvino_2021/bin/setupvars.sh
+$ xhost +local: && \
+  docker run --gpus all -it --rm \
+    -v `pwd`:/home/user/workdir \
+    -v ${HOME}/TFDS:/workspace/TFDS \
+    -v /tmp/.X11-unix/:/tmp/.X11-unix:rw \
+    --device /dev/video0:/dev/video0:mwr \
+    --net=host \
+    -e XDG_RUNTIME_DIR=$XDG_RUNTIME_DIR \
+    -e DISPLAY=$DISPLAY \
+    --privileged \
+    pinto0309/tflite2tensorflow:latest
 ```
 ### 3-2. **[Environment construction pattern 2]** Execution by Host machine
 To install using the Python Package Index (PyPI), use the following command.
@@ -235,8 +241,10 @@ The Windows version of flatc v1.12.0 can be downloaded from here.
 ## 4. Usage / Execution sample
 ### 4-1. Command line options
 ```
-usage: tflite2tensorflow [-h] --model_path MODEL_PATH --flatc_path
-                         FLATC_PATH --schema_path SCHEMA_PATH
+usage: tflite2tensorflow [-h]
+                         --model_path MODEL_PATH
+                         --flatc_path FLATC_PATH
+                         --schema_path SCHEMA_PATH
                          [--model_output_path MODEL_OUTPUT_PATH]
                          [--output_pb OUTPUT_PB]
                          [--output_no_quant_float32_tflite OUTPUT_NO_QUANT_FLOAT32_TFLITE]
@@ -409,7 +417,7 @@ $ tflite2tensorflow \
 ```
 $ view_npy --npy_file_path calibration_data_img_sample.npy
 ```
-Press the **`Q`** button to display the next image. **`calibration_data_img_sample.npy`** contains 20 images extracted from the MS-COCO data set.  
+Press the **`Q`** button to display the next image. **`calibration_data_img_sample.npy`** contains 20 images extracted from the MS-COCO data set.
 ![ezgif com-gif-maker](https://user-images.githubusercontent.com/33194443/109318923-aba15480-7891-11eb-84aa-034f77125f34.gif)
 ## 5. Sample image
 This is the result of converting MediaPipe's Meet Segmentation model (segm_full_v679.tflite / Float16 / Google Meet) to **`saved_model`** and then reconverting it to Float32 tflite. Replace the GPU-optimized **`Convolution2DTransposeBias`** layer with the standard **`TransposeConv`** and **`BiasAdd`** layers in a fully automatic manner. The weights and biases of the Float16 **`Dequantize`** layer are automatically back-quantized to Float32 precision. The generated **`saved_model`** in Float32 precision can be easily converted to **`Float16`**, **`INT8`**, **`EdgeTPU`**, **`TFJS`**, **`TF-TRT`**, **`CoreML`**, **`ONNX`**, **`OpenVINO`**, **`Myriad Inference Engine blob`**.
